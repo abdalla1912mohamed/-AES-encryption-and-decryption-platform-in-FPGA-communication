@@ -1,0 +1,1 @@
+-intstyle "ise" -incremental -o "C:/Users/TOSHIBA/Desktop/Final Code/Encryption/encryption/encrypt_test_isim_beh.exe" -prj "C:/Users/TOSHIBA/Desktop/Final Code/Encryption/encryption/encrypt_test_beh.prj" "work.encrypt_test" 

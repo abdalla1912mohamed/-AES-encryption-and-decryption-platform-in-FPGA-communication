@@ -1,0 +1,2 @@
+vhdl isim_temp "encrypt.vhd"
+vhdl isim_temp "encrypt_test.vhd"

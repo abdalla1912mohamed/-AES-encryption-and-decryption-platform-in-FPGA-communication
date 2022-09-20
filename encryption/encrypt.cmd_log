@@ -1,0 +1,1 @@
+xst -intstyle ise -ifn "C:/Users/TOSHIBA/Desktop/Final Code/Encryption/encryption/encrypt.xst" -ofn "C:/Users/TOSHIBA/Desktop/Final Code/Encryption/encryption/encrypt.syr" 

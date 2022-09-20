@@ -1,0 +1,656 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date:    08:58:08 12/03/2019 
+-- Design Name: 
+-- Module Name:    mazen - Behavioral 
+-- Project Name: 
+-- Target Devices: 
+-- Tool versions: 
+-- Description: 
+--
+-- Dependencies: 
+--
+-- Revision: 
+-- Revision 0.01 - File Created
+-- Additional Comments: 
+--
+----------------------------------------------------------------------------------
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_Logic_Arith.all;
+use IEEE.STD_Logic_unsigned.all;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx primitives in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity mazen is
+    Port ( clk : in  STD_LOGIC;
+           reset : in  STD_LOGIC;
+			  SF_D : out std_logic_vector(3 downto 0);
+			  LCD_E,LCD_RS,LCD_RW : out std_logic);
+end mazen;
+
+architecture Behavioral of mazen is
+--Signals
+signal ready : std_logic := '1';
+type tx_sequence is (high_setup, high_hold, oneus, low_setup, low_hold, fortyus, done);
+signal tx_state: tx_sequence := done;
+signal tx_byte : std_logic_vector(7 downto 0);
+signal tx_init : std_logic := '0';
+type init_sequence is (idle, fifteenms, one, two, three, four, five, six, seven, eight, done);
+signal init_state : init_sequence := idle;
+signal init_init, init_done : std_logic := '0';
+signal i : integer range 0 to 750000 := 0;
+signal i2 : integer range 0 to 2000 := 0;
+signal i3 : integer range 0 to 82000 := 0;
+signal SF_D0, SF_D1 : std_logic_vector(3 downto 0);
+signal LCD_E0, LCD_E1 : std_logic;
+signal mux : std_logic;
+signal counter : integer range 0 to 15 := 0;
+type display_state is (init, function_set, entry_set, set_display, clr_display, pause, set_addr, char_0, char_1, char_2, char_3, char_4, char_5, char_6, char_7, char_8, char_9, char_a, char_b, char_c, char_d, char_e, char_f, char_g, char_h, char_i, char_j, char_k, char_l, char_m, char_n, char_o, char_p, char_q, char_r, char_s, char_t, char_u, char_v, char_w, char_x, char_y, char_z, done);
+signal cur_state : display_state := init;
+type array_states is array (0 to 15) of display_state;
+signal states : array_states;
+type arr is array(0 to 15) of STD_LOGIC_VECTOR(7 downto 0);
+signal array_reg : arr;
+begin
+array_reg <= ("00111010","00011100","00011010","00101011","01000100","00000000","00000000","00000000","00000000","00000000","00000000","00000000","00000000","00000000","00000000","00000000");
+LCD_RW <= '0';
+with cur_state select
+	tx_init <= '0' when init | pause | done,
+				  '1' when others;
+with cur_state select
+				mux <= '1' when init,
+						 '0' when others;
+with cur_state select
+	init_init <= '1' when init,
+					 '0' when others;
+with cur_state select
+	LCD_RS <= '0' when function_set | entry_set | set_display | clr_display | set_addr,
+				 '1' when others;
+with cur_state select
+	tx_byte <= "00101000" when function_set,
+				  "00000110" when entry_set,
+				  "00001100" when set_display,
+				  "00000001" when clr_display,
+				  "10000000" when set_addr,
+	           "00110000" when char_0,
+	           "00110001" when char_1,
+	           "00110010" when char_2,
+	           "00110011" when char_3,
+	           "00110100" when char_4,
+	           "00110101" when char_5,
+	           "00110110" when char_6,
+	           "00110111" when char_7,
+	           "00111000" when char_8,
+	           "00111001" when char_9,
+	           "01100001" when char_a,
+	           "01100010" when char_b,
+	           "01100011" when char_c,
+	           "01100100" when char_d,
+	           "01100101" when char_e,
+	           "01100110" when char_f,
+	           "01100111" when char_g,
+	           "01101000" when char_h,
+	           "01101001" when char_i,
+	           "01101010" when char_j,
+	           "01101011" when char_k,
+	           "01101100" when char_l,
+	           "01101101" when char_m,
+	           "01101110" when char_n,
+	           "01101111" when char_o,
+	           "01110000" when char_p,
+	           "01110001" when char_q,
+	           "01110010" when char_r,
+	           "01110011" when char_s,
+	           "01110100" when char_t,
+	           "01110101" when char_u,
+	           "01110110" when char_v,
+	           "01110111" when char_w,
+	           "01111000" when char_x,
+	           "01111001" when char_y,
+	           "01111010" when char_z,
+				  "00000000" when others;
+	Process(array_reg)
+	begin
+	if(ready = '1')then
+	for i in 0 to 15 loop
+		if(array_reg(i) = "00000000")then
+			states(i) <= done;
+		elsif(array_reg(i) = "01000101")then
+			states(i) <= char_0;
+		elsif(array_reg(i) = "00010110")then
+			states(i) <= char_1;
+		elsif(array_reg(i) = "00011110")then
+			states(i) <= char_2;
+		elsif(array_reg(i) = "00100110")then
+			states(i) <= char_3;
+		elsif(array_reg(i) = "00100101")then
+			states(i) <= char_4;
+		elsif(array_reg(i) = "00101110")then
+			states(i) <= char_5;
+		elsif(array_reg(i) = "00110110")then
+			states(i) <= char_6;
+		elsif(array_reg(i) = "00111101")then
+			states(i) <= char_7;
+		elsif(array_reg(i) = "00111110")then
+			states(i) <= char_8;
+		elsif(array_reg(i) = "01000110")then
+			states(i) <= char_9;
+		elsif(array_reg(i) = "00011100")then
+			states(i) <= char_a;
+		elsif(array_reg(i) = "00110010")then
+			states(i) <= char_b;
+		elsif(array_reg(i) = "00100001")then
+			states(i) <= char_c;
+		elsif(array_reg(i) = "00100011")then
+			states(i) <= char_d;
+		elsif(array_reg(i) = "00100100")then
+			states(i) <= char_e;
+		elsif(array_reg(i) = "00101011")then
+			states(i) <= char_f;
+		elsif(array_reg(i) = "00110100")then
+			states(i) <= char_g;
+		elsif(array_reg(i) = "00110011")then
+			states(i) <= char_h;
+		elsif(array_reg(i) = "01000011")then
+			states(i) <= char_i;
+		elsif(array_reg(i) = "00111011")then
+			states(i) <= char_j;
+		elsif(array_reg(i) = "01000010")then
+			states(i) <= char_k;
+		elsif(array_reg(i) = "01001011")then
+			states(i) <= char_l;
+		elsif(array_reg(i) = "00111010")then
+			states(i) <= char_m;
+		elsif(array_reg(i) = "00110001")then
+			states(i) <= char_n;
+		elsif(array_reg(i) = "01000100")then
+			states(i) <= char_o;
+		elsif(array_reg(i) = "01001101")then
+			states(i) <= char_p;
+		elsif(array_reg(i) = "00010101")then
+			states(i) <= char_q;
+		elsif(array_reg(i) = "00101101")then
+			states(i) <= char_r;
+		elsif(array_reg(i) = "00011011")then
+			states(i) <= char_s;
+		elsif(array_reg(i) = "00101100")then
+			states(i) <= char_t;
+		elsif(array_reg(i) = "00111100")then
+			states(i) <= char_u;
+		elsif(array_reg(i) = "00101010")then
+			states(i) <= char_v;
+		elsif(array_reg(i) = "00011101")then
+			states(i) <= char_w;
+		elsif(array_reg(i) = "00100010")then
+			states(i) <= char_x;
+		elsif(array_reg(i) = "00110101")then
+			states(i) <= char_y;
+		elsif(array_reg(i) = "00011010")then
+			states(i) <= char_z;
+		end if;
+		end loop;
+		end if;
+end process;
+display : Process (clk,reset)
+variable state_counter : integer range 0 to 15 := 0;
+begin
+
+		if(reset = '1')then
+			cur_state <= function_set;
+		elsif(clk = '1' and clk'event)then
+			case cur_state is
+			when init => if(init_done = '1')then
+					cur_state <= function_set;
+					  else
+					cur_state <= init;
+					  end if;
+			when function_set => if(i2 = 2000)then
+						cur_state <= entry_set;
+						  else
+						cur_state <= function_set;
+						  end if;
+			when entry_set => if(i2 = 2000)then
+						cur_state <= set_display;
+						  else
+						cur_state <= entry_set;
+						  end if;
+			when set_display => if(i2 = 2000)then
+						cur_state <= clr_display;
+						  else
+						cur_state <= set_display;
+						  end if;
+			when clr_display => if(i2 = 2000)then
+						cur_state <= pause;
+						  else
+						cur_state <= clr_display;
+						  end if;
+			when pause => if(i3 = 82000)then
+						i3 <= 0;
+						cur_state <= set_addr;
+						  else
+						i3 <= i3 + 1;
+						cur_state <= pause;
+						  end if;
+			when set_addr => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= set_addr;
+					end if;
+			when char_0 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_0;
+					end if;
+			when char_1 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_1;
+					end if;
+			when char_2 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_2;
+					end if;
+			when char_3 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_3;
+					end if;
+			when char_4 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_4;
+					end if;
+			when char_5 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_5;
+					end if;
+			when char_6 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_6;
+					end if;
+			when char_7 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_7;
+					end if;
+			when char_8 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_8;
+					end if;
+			when char_9 => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_9;
+					end if;
+			when char_a => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_a;
+					end if;
+			when char_b => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_b;
+					end if;
+			when char_c => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_c;
+					end if;
+			when char_d => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_d;
+					end if;
+			when char_e => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_e;
+					end if;
+			when char_f => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_f;
+					end if;
+			when char_g => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_g;
+					end if;
+			when char_h => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_h;
+					end if;
+			when char_i => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_i;
+					end if;
+			when char_j => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_j;
+					end if;
+			when char_k => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_k;
+					end if;
+			when char_l => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_l;
+					end if;
+			when char_m => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_m;
+					end if;
+			when char_n => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_n;
+					end if;
+			when char_o => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_o;
+					end if;
+			when char_p => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_p;
+					end if;
+			when char_q => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_q;
+					end if;
+			when char_r => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_r;
+					end if;
+			when char_s => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_s;
+					end if;
+			when char_t => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_t;
+					end if;
+			when char_u => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_u;
+					end if;
+			when char_v => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_v;
+					end if;
+			when char_w => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_w;
+					end if;
+			when char_x => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_x;
+					end if;
+			when char_y => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_y;
+					end if;
+			when char_z => if(i2 = 2000)then
+						cur_state <= states(state_counter);
+						state_counter := state_counter + 1;
+					else
+						cur_state <= char_z;
+					end if;
+			when done => cur_state <= done;
+		end case;
+		end if;
+end process display;
+
+with mux select
+	SF_D <= SF_D0 when '0',
+			  SF_D1 when others;
+with mux select
+	LCD_E <= LCD_E0 when '0',
+			   LCD_E1 when others;	
+
+transmit: Process(clk, reset, tx_init)
+begin
+if(reset = '1')then
+	tx_state <= done;
+elsif(clk = '1' and clk'event)then
+	case tx_state is
+	when high_setup => LCD_E0 <= '0';
+			   SF_D0 <= tx_byte(7 downto 4);
+			   if(i2 = 2)then
+				tx_state <= high_hold;
+				i2 <= 0;
+			   else
+				tx_state <= high_setup;
+				i2 <= i2 + 1;
+			   end if;
+	when high_hold => LCD_E0 <= '1';
+			   SF_D0 <= tx_byte(7 downto 4);
+			   if(i2 = 12)then
+				tx_state <= oneus;
+				i2 <= 0;
+			   else
+				tx_state <= high_hold;
+				i2 <= i2 + 1;
+			   end if;
+	when oneus => LCD_E0 <= '0';
+			   if(i2 = 50)then
+				tx_state <= low_setup;
+				i2 <= 0;
+			   else
+				tx_state <= oneus;
+				i2 <= i2 + 1;
+			   end if;
+	when low_setup => LCD_E0 <= '0';
+			   SF_D0 <= tx_byte(3 downto 0);
+			   if(i2 = 2)then
+				tx_state <= low_hold;
+				i2 <= 0;
+			   else
+				tx_state <= low_setup;
+				i2 <= i2 + 1;
+			   end if;
+	when low_hold => LCD_E0 <= '1';
+			   SF_D0 <= tx_byte(3 downto 0);
+			   if(i2 = 12)then
+				tx_state <= fortyus;
+				i2 <= 0;
+			   else
+				tx_state <= low_hold;
+				i2 <= i2 + 1;
+			   end if;
+	when fortyus => LCD_E0 <= '0';
+			   if(i2 = 2000)then
+				tx_state <= done;
+				i2 <= 0;
+			   else
+				tx_state <= fortyus;
+				i2 <= i2 + 1;
+			   end if;
+	when done => LCD_E0 <= '0';
+			   if(tx_init = '1')then
+				tx_state <= high_setup;
+				i2 <= 0;
+			   else
+				tx_state <= done;
+				i2 <= 0;
+			   end if;
+	end case;
+end if;
+end process transmit;
+
+				
+power_on_initialize: Process(clk,reset,init_init)
+begin
+if(reset = '1')then
+	init_state <= idle;
+	init_done <= '0';
+elsif(clk = '1' and clk'event)then
+	case init_state is
+	when idle => init_done <='0';
+		     if(init_init = '1')then
+			init_state <= fifteenms;
+			i <= 0;
+		     else
+			init_state <= idle;
+			i <= i+1;
+		    end if;
+	when fifteenms => init_done <= '0';
+			  if(i = 750000)then
+				init_state <= one;
+				i <= 0;
+			  else
+				init_state <= fifteenms;
+				i <= i+1;
+			  end if;
+	when one => SF_D1 <= "0011";
+		    LCD_E1 <= '1';
+		    init_done <= '0';
+		    if(i = 11)then
+			init_state <= two;
+			i <= 0;
+		   else
+			init_state <= one;
+			i <= i+1;
+		   end if;
+	when two => LCD_E1 <= '0';
+		    init_done <= '0';
+		    if(i = 205000)then
+			init_state <= three;
+			i <= 0;
+		   else
+			init_state <= two;
+			i <= i+1;
+		   end if;
+	when three => SF_D1 <= "0011";
+		    LCD_E1 <= '1';
+		    init_done <= '0';
+		    if(i = 11)then
+			init_state <= four;
+			i <= 0;
+		   else
+			init_state <= three;
+			i <= i+1;
+		   end if;
+	when four => LCD_E1 <= '0';
+		    init_done <= '0';
+		    if(i = 5000)then
+			init_state <= five;
+			i <= 0;
+		   else
+			init_state <= four;
+			i <= i+1;
+		   end if;
+	when five => SF_D1 <= "0011";
+		    LCD_E1 <= '1';
+		    init_done <= '0';
+		    if(i = 11)then
+			init_state <= six;
+			i <= 0;
+		   else
+			init_state <= five;
+			i <= i+1;
+		   end if;
+	when six => LCD_E1 <= '0';
+		    init_done <= '0';
+		    if(i = 2000)then
+			init_state <= seven;
+			i <= 0;
+		   else
+			init_state <= six;
+			i <= i+1;
+		   end if;
+	when seven => SF_D1 <= "0010";
+		    LCD_E1 <= '1';
+		    init_done <= '0';
+		    if(i = 11)then
+			init_state <= eight;
+			i <= 0;
+		   else
+			init_state <= seven;
+			i <= i+1;
+		   end if;
+	when eight => LCD_E1 <= '0';
+		    init_done <= '0';
+		    if(i = 2000)then
+			init_state <= done;
+			i <= 0;
+		   else
+			init_state <= eight;
+			i <= i+1;
+		   end if;
+	when done => init_state <= done;
+		    init_done <= '1';
+	end case;
+end if;
+end process power_on_initialize;			
+
+
+end Behavioral;
+

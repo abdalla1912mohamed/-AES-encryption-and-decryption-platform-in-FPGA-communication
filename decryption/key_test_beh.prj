@@ -1,0 +1,2 @@
+vhdl work "decrypt.vhd"
+vhdl work "key_test.vhd"

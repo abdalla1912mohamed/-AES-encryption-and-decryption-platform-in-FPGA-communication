@@ -1,0 +1,3238 @@
+--------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date:    20:16:33 11/13/2019 
+-- Design Name: 
+-- Module Name:    encryption - Behavioral 
+-- Project Name: 
+-- Target Devices: 
+-- Tool versions: 
+-- Description: 
+--
+-- Dependencies: 
+--
+-- Revision: 
+-- Revision 0.01 - File Created
+-- Additional Comments: 
+
+--------------------------------------------------------------------------------
+package MultiDimentionalArray is
+  type matrixmazen is array(0 to 3, 0 to 3) of integer range 0 to 255;
+  type table is array(0 to 15, 0 to 15) of integer range 0 to 255;
+  type table2 is array(0 to 3, 0 to 9) of integer range 0 to 255;
+end MultiDimentionalArray;
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+use work.MultiDimentionalArray.all;
+
+entity encryption is
+	generic (
+		g_CLKS_PER_BIT : integer := 115     -- Needs to be set correctly
+		);
+	Port(keyboard: in std_logic;
+		  i_Clk: in  std_logic;
+		  reset : in  STD_LOGIC;
+         ps2c : in  STD_LOGIC;
+         ps2d : in  STD_LOGIC;
+         r_en : in  STD_LOGIC; -- receive enable
+		  o_TX_Active : out std_logic;
+		  o_TX_Serial : out std_logic;
+		  o_TX_Done   : out std_logic);
+end encryption;
+
+architecture Behavioral of encryption is
+--LCD Signals
+signal SF_D: std_logic_vector(3 downto 0);
+signal LCD_E: std_logic;
+signal LCD_RS: std_logic;
+signal LCD_RW: std_logic;
+--Keyboard signals
+	signal done: std_logic;
+	signal dout: std_logic_vector(7 downto 0);
+	type arr is array( 0 to 15 ) of STD_LOGIC_VECTOR(7 downto 0);  -- changed it from 15 down to 0   
+	signal count : integer := 0; -- number of entries in the array
+	signal arr_index : integer := 0;
+	signal isEnter : std_logic := '0';
+	signal array_reg : arr;
+	type statetype is (idle, dps, load); -- idle, data_parity_stop, load to complete shifting the stop bit
+	signal datam : STD_LOGIC_VECTOR(7 downto 0);
+	signal state_reg, state_next : statetype;
+	signal filter_reg, filter_next : STD_LOGIC_VECTOR (7 downto 0);
+	signal ps2c_filter_reg, ps2c_filter_next : STD_LOGIC;
+	signal n_reg, n_next : unsigned (3 downto 0); -- counter
+	signal b_reg, b_next : STD_LOGIC_VECTOR (10 downto 0);
+	signal fall_edge : STD_LOGIC;
+--Encryption signals
+		signal im : matrixmazen;
+		signal key: matrixmazen;
+		signal k: matrixmazen;
+		type box is array( 0 to 15 ,0 to 15 ) of std_logic_vector (7 downto 0 ) ; 
+signal   S : box ; 
+
+
+type matrix is array(0 to 3 , 0 to 3 ) of std_logic_vector( 7 downto 0 ) ; 
+signal data : matrix := (
+((x"63"),(x"63"),(x"63"),(x"63")),((x"63"),(x"63"),(x"63"),(x"63")),((x"63"),(x"63"),(x"63"),(x"63")),((x"63"),(x"63"),(x"63"),(x"63"))) ; 
+type mixcoloumn is array( 0 to 3 , 0 to 3 ) of integer range 0 to 255 ;
+signal mixmatrix : mixcoloumn := (
+(2,3,1,1),(1,2,3,1),(1,1,2,3),(3,1,1,2) ) ;  -- check  the real matrix    
+type word is array (0 to 3 ) of std_logic_vector (7 downto 0 ) ; 
+signal w0 : word ;
+signal w1 : word ;
+signal w2 : word ;
+signal w3 : word ;
+
+ 
+signal temp : std_logic_vector (7 downto 0) ; 
+signal temp1 : std_logic_vector (7 downto 0) ;
+signal temp2 : std_logic_vector (7 downto 0) ;
+signal temp3 : std_logic_vector (7 downto 0);
+signal tempA : std_logic_vector (7 downto 0);
+signal tempB : std_logic_vector (7 downto 0);
+signal tempC : std_logic_vector (7 downto 0);
+signal R: std_logic_vector (3 downto 0) ; 
+signal C: std_logic_vector (3 downto 0) ;
+signal R1: std_logic_vector (3 downto 0) ; 
+signal C1: std_logic_vector (3 downto 0) ;
+signal R2: std_logic_vector (3 downto 0) ; 
+signal C2: std_logic_vector (3 downto 0) ;
+signal R3: std_logic_vector (3 downto 0) ; 
+signal C3: std_logic_vector (3 downto 0) ;
+signal R4: std_logic_vector (3 downto 0) ; 
+signal C4: std_logic_vector (3 downto 0) ;
+signal R5: std_logic_vector (3 downto 0) ; 
+
+signal C5: std_logic_vector (3 downto 0) ;
+signal R6: std_logic_vector (3 downto 0) ; 
+signal C6: std_logic_vector (3 downto 0) ;
+signal R7: std_logic_vector (3 downto 0) ; 
+signal C7: std_logic_vector (3 downto 0) ;
+signal R8: std_logic_vector (3 downto 0) ; 
+signal C8: std_logic_vector (3 downto 0) ;
+signal R9: std_logic_vector (3 downto 0) ; 
+signal C9: std_logic_vector (3 downto 0) ;
+signal T : std_logic_vector (7 downto 0);
+signal T1 : std_logic_vector (7 downto 0);
+signal T2 : std_logic_vector (7 downto 0);
+signal T3 : std_logic_vector (7 downto 0);
+signal T4 : std_logic_vector (7 downto 0);
+signal T5 : std_logic_vector (7 downto 0);
+signal T6 : std_logic_vector (7 downto 0);
+signal T7 : std_logic_vector (7 downto 0);
+signal T8 : std_logic_vector (7 downto 0);
+signal x : integer ;  
+signal y : integer ;
+signal x1 : integer ;  
+signal y1 : integer ;  
+signal x2 : integer ;  
+signal y2 : integer ; 
+signal x3 : integer ;  
+signal y3 : integer ; 
+signal x4 : integer ;  
+signal y4 : integer ; 
+signal x5 : integer ;  
+signal y5 : integer ; 
+signal x6 : integer ;  
+signal y6 : integer ; 
+signal x7 : integer ;  
+signal y7 : integer ; 
+signal x8 : integer ;  
+signal y8: integer ; 
+
+
+signal temp22: integer;
+signal f: integer;
+signal g: integer;
+		--signal s_box_substitution: table;
+		signal Rcon: table2;
+		
+		signal round1: matrixmazen;signal round2: matrixmazen;signal round3: matrixmazen;signal round4: matrixmazen;signal round5: matrixmazen;signal round6: matrixmazen;signal round7: matrixmazen;signal round8: matrixmazen;signal round9: matrixmazen;signal round10: matrixmazen;
+		--initializing the tables needed in MixCloumns step (mul2 wa mul3)
+		signal mul2 : box:= (
+
+    (x"00",x"02",x"04",x"06",x"08",x"0a",x"0c",x"0e",x"10",x"12",x"14",x"16",x"18",x"1a",x"1c",x"1e"),
+    (x"20",x"22",x"24",x"26",x"28",x"2a",x"2c",x"2e",x"30",x"32",x"34",x"36",x"38",x"3a",x"3c",x"3e"),
+    (x"40",x"42",x"44",x"46",x"48",x"4a",x"4c",x"4e",x"50",x"52",x"54",x"56",x"58",x"5a",x"5c",x"5e"),
+    (x"60",x"62",x"64",x"66",x"68",x"6a",x"6c",x"6e",x"70",x"72",x"74",x"76",x"78",x"7a",x"7c",x"7e"),
+    (x"80",x"82",x"84",x"86",x"88",x"8a",x"8c",x"8e",x"90",x"92",x"94",x"96",x"98",x"9a",x"9c",x"9e"),
+    (x"a0",x"a2",x"a4",x"a6",x"a8",x"aa",x"ac",x"ae",x"b0",x"b2",x"b4",x"b6",x"b8",x"ba",x"bc",x"be"),
+    (x"c0",x"c2",x"c4",x"c6",x"c8",x"ca",x"cc",x"ce",x"d0",x"d2",x"d4",x"d6",x"d8",x"da",x"dc",x"de"),
+    (x"e0",x"e2",x"e4",x"e6",x"e8",x"ea",x"ec",x"ee",x"f0",x"f2",x"f4",x"f6",x"f8",x"fa",x"fc",x"fe"),
+    (x"1b",x"19",x"1f",x"1d",x"13",x"11",x"17",x"15",x"0b",x"09",x"0f",x"0d",x"03",x"01",x"07",x"05"),
+    (x"3b",x"39",x"3f",x"3d",x"33",x"31",x"37",x"35",x"2b",x"29",x"2f",x"2d",x"23",x"21",x"27",x"25"),
+    (x"5b",x"59",x"5f",x"5d",x"53",x"51",x"57",x"55",x"4b",x"49",x"4f",x"4d",x"43",x"41",x"47",x"45"),
+    (x"7b",x"79",x"7f",x"7d",x"73",x"71",x"77",x"75",x"6b",x"69",x"6f",x"6d",x"63",x"61",x"67",x"65"),
+    (x"9b",x"99",x"9f",x"9d",x"93",x"91",x"97",x"95",x"8b",x"89",x"8f",x"8d",x"83",x"81",x"87",x"85"),
+    (x"bb",x"b9",x"bf",x"bd",x"b3",x"b1",x"b7",x"b5",x"ab",x"a9",x"af",x"ad",x"a3",x"a1",x"a7",x"a5"),
+    (x"db",x"d9",x"df",x"dd",x"d3",x"d1",x"d7",x"d5",x"cb",x"c9",x"cf",x"cd",x"c3",x"c1",x"c7",x"c5"),
+    (x"fb",x"f9",x"ff",x"fd",x"f3",x"f1",x"f7",x"f5",x"eb",x"e9",x"ef",x"ed",x"e3",x"e1",x"e7",x"e5")
+) ;
+signal mul3 : box := (
+
+    (x"00",x"03",x"06",x"05",x"0c",x"0f",x"0a",x"09",x"18",x"1b",x"1e",x"1d",x"14",x"17",x"12",x"11"),
+    (x"30",x"33",x"36",x"35",x"3c",x"3f",x"3a",x"39",x"28",x"2b",x"2e",x"2d",x"24",x"27",x"22",x"21"),
+    (x"60",x"63",x"66",x"65",x"6c",x"6f",x"6a",x"69",x"78",x"7b",x"7e",x"7d",x"74",x"77",x"72",x"71"),
+    (x"50",x"53",x"56",x"55",x"5c",x"5f",x"5a",x"59",x"48",x"4b",x"4e",x"4d",x"44",x"47",x"42",x"41"),
+    (x"c0",x"c3",x"c6",x"c5",x"cc",x"cf",x"ca",x"c9",x"d8",x"db",x"de",x"dd",x"d4",x"d7",x"d2",x"d1"),
+    (x"f0",x"f3",x"f6",x"f5",x"fc",x"ff",x"fa",x"f9",x"e8",x"eb",x"ee",x"ed",x"e4",x"e7",x"e2",x"e1"),
+    (x"a0",x"a3",x"a6",x"a5",x"ac",x"af",x"aa",x"a9",x"b8",x"bb",x"be",x"bd",x"b4",x"b7",x"b2",x"b1"),
+    (x"90",x"93",x"96",x"95",x"9c",x"9f",x"9a",x"99",x"88",x"8b",x"8e",x"8d",x"84",x"87",x"82",x"81"),
+    (x"9b",x"98",x"9d",x"9e",x"97",x"94",x"91",x"92",x"83",x"80",x"85",x"86",x"8f",x"8c",x"89",x"8a"),
+    (x"ab",x"a8",x"ad",x"ae",x"a7",x"a4",x"a1",x"a2",x"b3",x"b0",x"b5",x"b6",x"bf",x"bc",x"b9",x"ba"),
+    (x"fb",x"f8",x"fd",x"fe",x"f7",x"f4",x"f1",x"f2",x"e3",x"e0",x"e5",x"e6",x"ef",x"ec",x"e9",x"ea"),
+    (x"cb",x"c8",x"cd",x"ce",x"c7",x"c4",x"c1",x"c2",x"d3",x"d0",x"d5",x"d6",x"df",x"dc",x"d9",x"da"),
+    (x"5b",x"58",x"5d",x"5e",x"57",x"54",x"51",x"52",x"43",x"40",x"45",x"46",x"4f",x"4c",x"49",x"4a"),
+    (x"6b",x"68",x"6d",x"6e",x"67",x"64",x"61",x"62",x"73",x"70",x"75",x"76",x"7f",x"7c",x"79",x"7a"),
+    (x"3b",x"38",x"3d",x"3e",x"37",x"34",x"31",x"32",x"23",x"20",x"25",x"26",x"2f",x"2c",x"29",x"2a"),
+    (x"0b",x"08",x"0d",x"0e",x"07",x"04",x"01",x"02",x"13",x"10",x"15",x"16",x"1f",x"1c",x"19",x"1a")
+
+) ; 
+		
+
+		--UART signals
+		type t_SM_Main is (s_Idle, s_TX_Start_Bit, s_TX_Data_Bits, s_TX_Stop_Bit, s_Cleanup);
+		signal r_SM_Main : t_SM_Main := s_Idle;
+		signal r_Clk_Count : integer range 0 to g_CLKS_PER_BIT-1 := 0;
+		signal r_Bit_Index : integer range 0 to 7 := 0;  -- 8 Bits Total
+		signal r_TX_Data   : std_logic_vector(7 downto 0) := (others => '0');
+		signal r_TX_Done   : std_logic := '0';
+		
+		--Missing inputs of UART code
+		signal i_TX_DV : std_logic;
+		signal i_TX_Byte : std_logic_vector(7 downto 0);
+begin
+--	Process of UART Sender
+  p_UART_TX : process (i_Clk)
+  begin
+    if rising_edge(i_Clk) then
+         
+      case r_SM_Main is
+ 
+        when s_Idle =>
+          o_TX_Active <= '0';
+          o_TX_Serial <= '1';         -- Drive Line High for Idle
+          r_TX_Done   <= '0';
+          r_Clk_Count <= 0;
+          r_Bit_Index <= 0;
+ 
+          if i_TX_DV = '1' then
+            r_TX_Data <= i_TX_Byte;
+            r_SM_Main <= s_TX_Start_Bit;
+          else
+            r_SM_Main <= s_Idle;
+          end if;
+ 
+           
+--         Send out Start Bit. Start bit = 0
+        when s_TX_Start_Bit =>
+          o_TX_Active <= '1';
+          o_TX_Serial <= '0';
+ 
+--           Wait g_CLKS_PER_BIT-1 clock cycles for start bit to finish
+          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+            r_Clk_Count <= r_Clk_Count + 1;
+            r_SM_Main   <= s_TX_Start_Bit;
+          else
+            r_Clk_Count <= 0;
+            r_SM_Main   <= s_TX_Data_Bits;
+          end if;
+ 
+           
+--         Wait g_CLKS_PER_BIT-1 clock cycles for data bits to finish          
+        when s_TX_Data_Bits =>
+          o_TX_Serial <= r_TX_Data(r_Bit_Index);
+           
+          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+            r_Clk_Count <= r_Clk_Count + 1;
+            r_SM_Main   <= s_TX_Data_Bits;
+          else
+            r_Clk_Count <= 0;
+             
+--             Check if we have sent out all bits
+            if r_Bit_Index < 7 then
+              r_Bit_Index <= r_Bit_Index + 1;
+              r_SM_Main   <= s_TX_Data_Bits;
+            else
+              r_Bit_Index <= 0;
+              r_SM_Main   <= s_TX_Stop_Bit;
+            end if;
+          end if;
+ 
+ 
+--         Send out Stop bit.  Stop bit = 1
+        when s_TX_Stop_Bit =>
+          o_TX_Serial <= '1';
+ 
+--           Wait g_CLKS_PER_BIT-1 clock cycles for Stop bit to finish
+          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+            r_Clk_Count <= r_Clk_Count + 1;
+            r_SM_Main   <= s_TX_Stop_Bit;
+          else
+            r_TX_Done   <= '1';
+            r_Clk_Count <= 0;
+            r_SM_Main   <= s_Cleanup;
+          end if;
+ 
+                   
+--         Stay here 1 clock
+        when s_Cleanup =>
+          o_TX_Active <= '0';
+          r_TX_Done   <= '1';
+          r_SM_Main   <= s_Idle;
+        
+      end case;
+    end if;
+	 
+  end process p_UART_TX;
+  
+  o_TX_Done <= r_TX_Done;
+    
+--  Process of encrypting then sending the data
+--  Keyboard Code (output of this code will be a matrix that will be put in signal i)
+--   =====================================================================
+-- filter circuit and falling edge tick generation for ps2 clock signal
+-- =====================================================================	
+	process(i_clk, reset) 
+	begin
+		if reset = '1' then
+			filter_reg <= (others => '0'); 
+			ps2c_filter_reg <= '0';
+		
+		elsif (i_clk'event and i_clk = '1') then
+			filter_reg <= filter_next;
+			ps2c_filter_reg <= ps2c_filter_next;
+		
+		end if;
+	end process;
+	
+	filter_next <= ps2c & filter_reg (7 downto 1);
+	ps2c_filter_next <= '1' when filter_reg = "11111111" else
+						'0' when filter_reg = "00000000" else
+						ps2c_filter_reg;
+	fall_edge <= ps2c_filter_reg and (not ps2c_filter_next);
+	
+-- =====================================================================
+-- fsmd to extract the 8-bit data
+-- =====================================================================
+
+	--registers ---------------------------------------------------------
+	process(i_clk, reset)
+	begin
+		if reset = '1' then
+			state_reg <= idle;
+			n_reg <= (others => '0');
+			b_reg <= (others => '0');
+			
+		elsif(i_clk'event and i_clk = '1') then
+			state_reg <= state_next;
+			n_reg <= n_next;
+			b_reg <= b_next;
+		
+		end if;
+	end process;
+	
+--	 next-state logic -------------------------------------------------
+	process(state_reg, n_reg, b_reg, fall_edge, r_en, ps2d)
+	begin
+		done <= '0';
+		state_next <= state_reg;
+		n_next <= n_reg;
+		b_next <= b_next;
+		
+		case state_reg is
+		
+			when idle =>
+				if (fall_edge = '1' and r_en = '1') then
+--					 shift in the "start" bit
+					b_next <= ps2d & b_reg (10 downto 1);
+					n_next <= "1001"; 
+					state_next <= dps;
+				
+				end if;
+				
+			when dps => -- 8 data + 1 parity + 1 stop
+				if fall_edge = '1' then
+					b_next <= ps2d & b_reg (10 downto 1);
+						
+						if n_reg = 0 then
+							state_next <= load;
+						
+						else
+							n_next <= n_reg - 1;
+						
+						end if;
+				end if;
+				
+			when load =>
+--				 1 extra clock cycle to complete 11-bits 
+				state_next <= idle;
+				done <= '1';
+		
+		end case;
+	end process;
+	
+	
+	process(reset,datam)
+	
+		variable row: integer;
+		variable a: integer;
+		variable b: integer;
+		variable cm: integer;
+		variable d: integer;
+		variable index: integer;
+		variable counter: integer;
+		variable max: integer;
+		variable sm: integer;
+		variable tm: integer;
+		variable u: integer;
+		variable v: integer;
+		variable w: integer;
+		variable xm: integer;
+		variable ym: integer;
+		variable z: integer;
+		variable clk_count: integer;
+		constant sent_count: integer:=15;
+		variable c1m: integer;
+		variable c2m: integer;
+	begin
+		if reset ='1' then
+			count <= 0;
+			arr_index <= 0;
+			isEnter <= '0';
+			
+			for i in 0 to 15 loop
+				array_reg(i) <= "00000000";
+				
+			end loop;
+		enf;
+		
+		if datam = "01011010" then
+			isEnter <= '1';
+		end if;
+		
+		if isEnter = '0' then
+			array_reg(arr_index) <= datam;
+			arr_index <= arr_index + 1;
+			count <= count + 1;
+
+		end if;
+		
+		if(isEnter='1')then
+--		initializing the matrix that will be encrypted
+--		Put received elemnts in matrix
+		cm:=0;
+		d:=0;
+		index:=0;
+		max:=16;
+		counter:=count;
+		
+		for j in 0 to max loop
+		if(counter>0)then
+		index := index + 1;
+			im(cm,d)<=to_integer(unsigned(array_reg(index)));
+				cm := cm+1;
+				if(cm=4)then
+					cm:=0;
+					d:=d+1;
+				end if; 
+		end if;
+		counter := counter - 1;
+		end loop;
+
+--		fill the rest of the matrix with zeroes
+		for j in 0 to max loop
+		if(count<15)then
+			im(cm,d)<=0;
+			if(cm=4)then
+				cm:=0;
+				d:=d+1;
+			end if;
+		end if;
+		count<=count+1;
+		end loop; end process 
+		--initializing the Rcon table
+		Rcon(0,0)<=01;Rcon(1,0)<=00;Rcon(2,0)<=00;Rcon(3,0)<=00;
+		Rcon(0,1)<=02;Rcon(1,1)<=00;Rcon(2,1)<=00;Rcon(3,1)<=00;
+		Rcon(0,2)<=04;Rcon(1,2)<=00;Rcon(2,2)<=00;Rcon(3,2)<=00;
+		Rcon(0,3)<=08;Rcon(1,3)<=00;Rcon(2,3)<=00;Rcon(3,3)<=00;
+		Rcon(0,4)<=10;Rcon(1,4)<=00;Rcon(2,4)<=00;Rcon(3,4)<=00;
+		Rcon(0,5)<=20;Rcon(1,5)<=00;Rcon(2,5)<=00;Rcon(3,5)<=00;
+		Rcon(0,6)<=40;Rcon(1,6)<=00;Rcon(2,6)<=00;Rcon(3,6)<=00;
+		Rcon(0,7)<=80;Rcon(1,7)<=00;Rcon(2,7)<=00;Rcon(3,7)<=00;
+		Rcon(0,8)<=27;Rcon(1,8)<=00;Rcon(2,8)<=00;Rcon(3,8)<=00;
+		Rcon(0,9)<=36;Rcon(1,9)<=00;Rcon(2,9)<=00;Rcon(3,9)<=00;
+	--	initializing the s_box table
+	-- load data 
+for i in 0 to  3 loop 
+for j in 0 to 3 loop
+data(i,j)<=std_logic_vector(to_unsigned(im(i,j), 8));
+end loop ;
+end loop ; 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+S(0,0) <= (x"63") ; 
+S(0,1) <= (x"7c");
+S(0,2) <= (x"77");
+S(0,3) <= (x"7B");
+S(0,4) <= (x"F2");
+S(0,5) <= (x"6B");
+S(0,6) <= (x"6F");
+S(0,7) <= (x"C5");
+S(0,8) <= (x"30");
+S(0,9) <= (x"01");
+S(0,10) <= (x"67");
+S(0,11) <= (x"2B");
+S(0,12) <= (x"FE");
+S(0,13) <= (x"D7");
+S(0,14) <= (x"AB");
+S(0,15)<=(x"76");
+S(1,0)  <= (x"CA");
+S(1,1)  <= (x"82");
+S(1,2)  <= (x"C9");
+S(1,3)  <= (x"7D");
+S(1,4)  <= (x"FA");
+S(1,5)  <= (x"59");
+S(1,6)  <= (x"47");
+S(1,7)    <=(x"F0");
+S(1,8)    <= (x"AD");
+S(1,9)    <=(x"D4");
+S(1,10)    <= (x"A2");
+S(1,11)    <=(x"AF");
+S(1,12)    <= (x"9C");
+S(1,13)    <= (x"A4");
+S(1,14)    <= (x"72");
+S(1,15)    <= (x"C0");
+S(2,0)  <=( x"B7");
+S(2,1)  <= (x"FD");
+S(2,2)    <=(x"93");
+S(2,3)    <= (x"26");
+S(2,4)    <= (x"36");
+S(2,5)    <= (x"3F");
+S(2,6)    <= (x"F7");
+S(2,7)    <= (x"CC");
+S(2,8)    <= (x"34");
+S(2,9)    <= (x"A5");
+S(2,10)    <= (x"EF");
+S(2,11)    <= (x"F1");
+S(2,12)    <= (x"71");
+S(2,13)    <=(x"D8");
+S(2,14)    <= (x"31");
+S(2,15)    <= (x"15");
+S(3,0)    <=( x"04");
+S(3,1)    <=(x"C7");
+S(3,2)    <= (x"23");
+S(3,3)    <= (x"C3");
+S(3,4)    <= (x"18");
+S(3,5)    <= (x"96");
+S(3,6)    <= (x"05");
+S(3,7)    <= (x"98");
+S(3,8)    <=(x"07");
+S(3,9)    <= (x"12");
+S(3,10)    <= (x"80");
+S(3,11)    <=(x"E2");
+S(3,12)    <=(x"EB");
+S(3,13)    <= (x"27");
+S(3,14)    <= (x"B2");
+S(3,15)    <= (x"75");   
+S(4,0)    <= (x"09");
+S(4,1)    <= (x"83");
+S(4,2)    <=(x"2C");
+S(4,3)  <= (x"1A");
+S(4,4)    <= (x"1B");
+S(4,5)    <= (x"6E");
+S(4,6)    <= (x"5A");
+S(4,7)    <= (x"A0");
+S(4,8)    <= (x"52");
+S(4,9)    <=(x"3B");
+S(4,10)    <= (x"D6");
+S(4,11)    <= (x"B3");
+S(4,12)    <= (x"29");
+S(4,13)    <= (x"E3");
+S(4,14)    <=(x"2F");
+S(4,15)    <= (x"84");
+S(5,0)    <= (x"53");
+S(5,1)    <= (x"D1");
+S(5,2)    <= (x"00");
+S(5,3)    <= (x"ED");
+S(5,4)    <= (x"20");
+S(5,5)    <=(x"FC");
+S(5,6)    <= (x"B1");
+S(5,7)    <= (x"5B");
+S(5,8)    <= (x"6A");
+S(5,9)    <= (x"CB");
+S(5,10)    <=(x"BE");
+S(5,11)    <= (x"39");
+S(5,12)    <= (x"4A");
+S(5,13)    <= (x"4C");
+S(5,14)    <= (x"58");
+S(5,15)    <= (x"CF");
+S(6,0)    <= (x"D0");
+S(6,1)    <= (x"EF");
+S(6,2)    <= (x"AA");
+S(6,3)    <= (x"FB");
+S(6,4)    <= (x"43");
+S(6,5)    <= (x"4D");
+S(6,6)   <= (x"33");
+S(6,7)   <= (x"85");
+S(6,8)    <=(x"45");
+S(6,9)    <= (x"F9");
+S(6,10)    <= (x"02");
+S(6,11)   <= (x"7F");
+S(6,12)    <= (x"50");
+S(6,13)    <= (x"3C");
+S(6,14)    <=(x"9F");
+S(6,15)    <= (x"A8");
+S(7,0)   <=(x"51");
+S(7,1)    <= (x"A3");
+S(7,2)    <=(x"40");
+S(7,3)    <= (x"8F");
+S(7,4)    <= (x"92");
+S(7,5)    <= (x"9D");
+S(7,6)    <= (x"38");
+S(7,7)    <= (x"F5");
+S(7,8)    <= (x"BC");
+S(7,9)    <= (x"B6");
+S(7,10)    <= (x"DA");
+S(7,11)    <= (x"21");
+S(7,12)    <= (x"10");
+S(7,13)    <= (x"FF");
+S(7,14)    <= (x"F3");
+S(7,15)    <= (x"D2");
+S(8,0)    <= (x"CD");
+S(8,1)    <= (x"0C");
+S(8,2)    <= (x"13");
+S(8,3)    <= (x"EC");
+S(8,4)    <= (x"5F");
+S(8,5)    <= (x"97");
+S(8,6)    <= (x"44");
+S(8,7)    <= (x"17");
+S(8,8)    <= (x"C4");
+S(8,9)    <= (x"A7");
+S(8,10)    <= (x"7E");
+S(8,11)   <= (x"3D");
+S(8,12)    <= (x"64");
+S(8,13)    <= (x"5D");
+S(8,14)  <=(x"19");
+S(8,15)    <= (x"73");
+S(9,0)    <= (x"60");
+S(9,1)    <= (x"81");
+S(9,2)    <= (x"4F");
+S(9,3)    <= (x"DC");
+S(9,4)  <= (x"22");
+S(9,5)    <=(x"2A");
+S(9,6)    <= (x"90");
+S(9,7)    <= (x"88");
+S(9,8)    <= (x"46");
+S(9,9)    <= (x"EE");
+S(9,10)    <= (x"B8");
+S(9,11)    <= (x"14");
+S(9,12)    <= (x"DE");
+S(9,13)    <= (x"5E");
+S(1,4)    <=(x"0B");
+S(9,15)    <= (x"DB");
+S(10,0)    <= (x"E0");
+S(10,1)    <= (x"32");
+S(10,2)    <= (x"3A");
+S(10,3)    <= (x"0A");
+S(10,4)    <=(x"49");
+S(10,5)    <= (x"06");
+S(10,6)    <= (x"24");
+S(10,7)    <= (x"5C");
+S(10,8)    <= (x"C2");
+S(10,9)    <= (x"D3");
+S(10,10)    <= (x"AC");
+S(10,11)    <= (x"62");
+S(10,12)    <= (x"91");
+S(10,13) <= (x"95");
+S(10,14)  <= (x"E4");
+S(10,15)  <= (x"79");
+S(11,0)  <=(x"E7");
+S(11,1)  <= (x"C8");
+S(11,2)  <= (x"37");
+S(11,3)  <= (x"6D");
+S(11,4)  <= (x"8D");
+S(11,5)  <= (x"D5");
+S(11,6)  <= (x"4E");
+S(11,7)  <= (x"A9");
+S(11,8)  <= (x"6C");
+S(11,9)  <= (x"56");
+S(11,10)  <= (x"F4");
+S(11,11)  <= (x"EA");
+S(11,12)  <= (x"65");
+S(11,13)  <= (x"7A");
+S(11,14)  <= (x"AE");
+S(11,15)  <= (x"08");
+S(12,0)  <=(x"BA");
+S(12,1)  <= (x"78");
+S(12,2)  <= (x"25");
+S(12,3)  <= (x"23");
+S(12,4)  <= (x"1C");
+S(12,5)  <= (x"A6");
+S(12,6)  <= (x"B4");
+S(12,7)  <= (x"C6");
+S(12,8)  <= (x"E8");
+S(12,9)  <= (x"DD");
+S(12,10)  <= (x"74");
+S(12,11)  <=(x"1F");
+S(12,12)  <= (x"4B");
+S(12,13)  <= (x"BD");
+S(12,14)  <= (x"8B");
+S(12,15)  <= (x"8A");
+S(13,0)  <= (x"70");
+S(13,1)  <= (x"3E");
+S(13,2)  <= (x"B5");
+S(13,3)  <= (x"66");
+S(13,4)  <= (x"48");
+S(13,5)  <= (x"03");
+S(13,6)  <= (x"F6");
+S(13,7)  <= (x"0E");
+S(13,8)  <= (x"61");
+S(13,9)  <= (x"35");
+S(13,10)  <= (x"57");
+S(13,11)  <= (x"B9");
+S(13,12)  <= (x"86");
+S(13,13)  <= (x"C1");
+S(13,14)  <= (x"1D");
+S(13,15)  <= (x"9E");
+ S(14,0)  <=(x"E1");
+S(14,1)  <= (x"FB");
+S(14,2)  <= (x"98");
+S(14,3)  <= (x"11");
+S(14,4)  <= (x"69");
+S(14,5) <=(x"D9");
+S(14,6)  <= (x"8E");
+S(14,7)  <= (x"94");
+S(14,8)  <= (x"9B");
+S(14,9)  <= (x"1E");
+S(14,10)  <= (x"87");
+S(14,11)  <= (x"E9");
+S(14,12)  <= (x"CE");
+S(14,13)  <= (x"55");
+S(14,14)  <= (x"28");
+S(14,15)  <= (x"DF");
+S(15,0)  <= (x"8C");
+S(15,1)  <= (x"A1");
+S(15,2)  <= (x"89");
+S(15,3)  <= (x"0D");
+S(15,4)  <= (x"BF");
+S(15,5)  <= (x"E6");
+S(15,6)  <= (x"42");
+S(15,7)  <= (x"68");
+S(15,8)  <= (x"41");
+S(15,9)  <= (x"99");
+S(15,10)    <= (x"2D");
+S(15,11)    <= (x"0F");
+S(15,12)    <=(x"B0");
+S(15,13)   <=(x"54");
+S(15,14)    <= (x"BB");
+S(15,15)    <= (x"16");
+-- load data 
+
+--		initializing the key "should be random"
+		key(0,0)<=0;key(0,1)<=0;key(0,2)<=0;key(0,3)<=0;key(1,0)<=0;key(1,1)<=0;key(1,2)<=0;key(1,3)<=0;key(2,0)<=0;key(2,1)<=0;key(2,2)<=0;key(2,3)<=0;key(3,0)<=0;key(3,1)<=0;key(3,2)<=0;key(3,3)<=0;
+	--	Encryption
+--		generating the round keys from the initial random key above		
+		
+	k<=key;
+--Round1 Key
+
+		temp22 <=k(0,3);
+		k(0,3)<=k(1,3);
+		k(1,3)<=k(2,3);
+		k(2,3)<=k(3,3);
+		k(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= k(counter,3) / 16;
+				g <= k(counter,3) mod 16;
+				k(counter,3)<= to_integer(unsigned(S(g,f)));
+			
+		end loop;
+		round1(0,0)<= to_integer(((to_unsigned(key(0,0),8)) xor (to_unsigned(key(0,3),8)) xor (to_unsigned(Rcon(0,0),8))));
+		round1(1,0)<= to_integer(((to_unsigned(key(1,0),8)) xor (to_unsigned(key(1,3),8)) xor (to_unsigned(Rcon(1,0),8))));
+		round1(2,0)<= to_integer(((to_unsigned(key(2,0),8)) xor (to_unsigned(key(2,3),8)) xor (to_unsigned(Rcon(2,0),8))));
+		round1(3,0)<= to_integer(((to_unsigned(key(3,0),8)) xor (to_unsigned(key(3,3),8)) xor (to_unsigned(Rcon(3,0),8))));
+		round1(0,1)<= to_integer((to_unsigned(key(0,1),8) xor to_unsigned(round1(0,0),8)));
+		round1(1,1)<= to_integer((to_unsigned(key(1,1),8) xor to_unsigned(round1(1,0),8)));
+		round1(2,1)<= to_integer((to_unsigned(key(2,1),8) xor to_unsigned(round1(2,0),8)));
+		round1(3,1)<= to_integer((to_unsigned(key(3,1),8) xor to_unsigned(round1(3,0),8)));	
+		round1(0,2)<= to_integer((to_unsigned(key(0,2),8) xor to_unsigned(round1(0,1),8)));
+		round1(1,2)<= to_integer((to_unsigned(key(1,2),8) xor to_unsigned(round1(1,1),8)));
+		round1(2,2)<= to_integer((to_unsigned(key(2,2),8) xor to_unsigned(round1(2,1),8)));
+		round1(3,2)<= to_integer((to_unsigned(key(3,2),8) xor to_unsigned(round1(3,1),8)));
+		round1(0,3)<= to_integer((to_unsigned(key(0,3),8) xor to_unsigned(round1(0,2),8)));
+		round1(1,3)<= to_integer((to_unsigned(key(1,3),8) xor to_unsigned(round1(1,2),8)));
+		round1(2,3)<= to_integer((to_unsigned(key(2,3),8) xor to_unsigned(round1(2,2),8)));
+		round1(3,3)<= to_integer((to_unsigned(key(3,3),8) xor to_unsigned(round1(3,2),8)));
+		--Round2 Key
+		temp22 <=round1(0,3);
+		round1(0,3)<=round1(1,3);
+		round1(1,3)<=round1(2,3);
+		round1(2,3)<=round1(3,3);
+		round1(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round1(counter,3) / 16;
+				g <= round1(counter,3) mod 16;
+				round1(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round2(0,0)<= to_integer(((to_unsigned(round1(0,0),8)) xor (to_unsigned(round1(0,3),8)) xor (to_unsigned(Rcon(0,1),8))));
+		round2(1,0)<= to_integer(((to_unsigned(round1(1,0),8)) xor (to_unsigned(round1(1,3),8)) xor (to_unsigned(Rcon(1,1),8))));
+		round2(2,0)<= to_integer(((to_unsigned(round1(2,0),8)) xor (to_unsigned(round1(2,3),8)) xor (to_unsigned(Rcon(2,1),8))));
+		round2(3,0)<= to_integer(((to_unsigned(round1(3,0),8)) xor (to_unsigned(round1(3,3),8)) xor (to_unsigned(Rcon(3,1),8))));
+		round2(0,1)<= to_integer((to_unsigned(round1(0,1),8) xor to_unsigned(round2(0,0),8)));
+		round2(1,1)<= to_integer((to_unsigned(round1(1,1),8) xor to_unsigned(round2(1,0),8)));
+		round2(2,1)<= to_integer((to_unsigned(round1(2,1),8) xor to_unsigned(round2(2,0),8)));
+		round2(3,1)<= to_integer((to_unsigned(round1(3,1),8) xor to_unsigned(round2(3,0),8)));	
+		round2(0,2)<= to_integer((to_unsigned(round1(0,2),8) xor to_unsigned(round2(0,1),8)));
+		round2(1,2) <= to_integer((to_unsigned(round1(1,2),8) xor to_unsigned(round2(1,1),8)));
+		round2(2,2)<= to_integer((to_unsigned(round1(2,2),8) xor to_unsigned(round2(2,1),8)));
+		round2(3,2)<= to_integer((to_unsigned(round1(3,2),8) xor to_unsigned(round2(3,1),8)));
+		round2(0,3)<= to_integer((to_unsigned(round1(0,3),8) xor to_unsigned(round2(0,2),8)));
+		round2(1,3)<= to_integer((to_unsigned(round1(1,3),8) xor to_unsigned(round2(1,2),8)));
+		round2(2,3)<= to_integer((to_unsigned(round1(2,3),8) xor to_unsigned(round2(2,2),8)));
+		round2(3,3)<= to_integer((to_unsigned(round1(3,3),8) xor to_unsigned(round2(3,2),8)));
+		--Round3 Key
+		temp22 <=round2(0,3);
+		round2(0,3)<=round2(1,3);
+		round2(1,3)<=round2(2,3);
+		round2(2,3)<=round2(3,3);
+		round2(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round2(counter,3) / 16;
+				g <= round2(counter,3) mod 16;
+				round2(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round3(0,0)<= to_integer(((to_unsigned(round2(0,0),8)) xor (to_unsigned(round2(0,3),8)) xor (to_unsigned(Rcon(0,2),8))));
+		round3(1,0)<= to_integer(((to_unsigned(round2(1,0),8)) xor (to_unsigned(round2(1,3),8)) xor (to_unsigned(Rcon(1,2),8))));
+		round3(2,0)<= to_integer(((to_unsigned(round2(2,0),8)) xor (to_unsigned(round2(2,3),8)) xor (to_unsigned(Rcon(2,2),8))));
+		round3(3,0)<= to_integer(((to_unsigned(round2(3,0),8)) xor (to_unsigned(round2(3,3),8)) xor (to_unsigned(Rcon(3,2),8))));
+		round3(0,1)<= to_integer((to_unsigned(round2(0,1),8) xor to_unsigned(round3(0,0),8)));
+		round3(1,1)<= to_integer((to_unsigned(round2(1,1),8) xor to_unsigned(round3(1,0),8)));
+		round3(2,1)<= to_integer((to_unsigned(round2(2,1),8) xor to_unsigned(round3(2,0),8)));
+		round3(3,1)<= to_integer((to_unsigned(round2(3,1),8) xor to_unsigned(round3(3,0),8)));	
+		round3(0,2)<= to_integer((to_unsigned(round2(0,2),8) xor to_unsigned(round3(0,1),8)));
+		round3(1,2)<= to_integer((to_unsigned(round2(1,2),8) xor to_unsigned(round3(1,1),8)));
+		round3(2,2)<= to_integer((to_unsigned(round2(2,2),8) xor to_unsigned(round3(2,1),8)));
+		round3(3,2)<= to_integer((to_unsigned(round2(3,2),8) xor to_unsigned(round3(3,1),8)));
+		round3(0,3)<= to_integer((to_unsigned(round2(0,3),8) xor to_unsigned(round3(0,2),8)));
+		round3(1,3)<= to_integer((to_unsigned(round2(1,3),8) xor to_unsigned(round3(1,2),8)));
+		round3(2,3)<= to_integer((to_unsigned(round2(2,3),8) xor to_unsigned(round3(2,2),8)));
+		round3(3,3)<= to_integer((to_unsigned(round2(3,3),8) xor to_unsigned(round3(3,2),8)));
+		--Round4 Key
+		temp22 <=round3(0,3);
+		round3(0,3)<=round3(1,3);
+		round3(1,3)<=round3(2,3);
+		round3(2,3)<=round3(3,3);
+		round3(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round3(counter,3) / 16;
+				g <= round3(counter,3) mod 16;
+				round3(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round4(0,0)<= to_integer(((to_unsigned(round3(0,0),8)) xor (to_unsigned(round3(0,3),8)) xor (to_unsigned(Rcon(0,3),8))));
+		round4(1,0)<= to_integer(((to_unsigned(round3(1,0),8)) xor (to_unsigned(round3(1,3),8)) xor (to_unsigned(Rcon(1,3),8))));
+		round4(2,0)<= to_integer(((to_unsigned(round3(2,0),8)) xor (to_unsigned(round3(2,3),8)) xor (to_unsigned(Rcon(2,3),8))));
+		round4(3,0)<= to_integer(((to_unsigned(round3(3,0),8)) xor (to_unsigned(round3(3,3),8)) xor (to_unsigned(Rcon(3,3),8))));
+		round4(0,1)<= to_integer((to_unsigned(round3(0,1),8) xor to_unsigned(round4(0,0),8)));
+		round4(1,1)<= to_integer((to_unsigned(round3(1,1),8) xor to_unsigned(round4(1,0),8)));
+		round4(2,1)<= to_integer((to_unsigned(round3(2,1),8) xor to_unsigned(round4(2,0),8)));
+		round4(3,1)<= to_integer((to_unsigned(round3(3,1),8) xor to_unsigned(round4(3,0),8)));	
+		round4(0,2)<= to_integer((to_unsigned(round3(0,2),8) xor to_unsigned(round4(0,1),8)));
+		round4(1,2)<= to_integer((to_unsigned(round3(1,2),8) xor to_unsigned(round4(1,1),8)));
+		round4(2,2)<= to_integer((to_unsigned(round3(2,2),8) xor to_unsigned(round4(2,1),8)));
+		round4(3,2)<= to_integer((to_unsigned(round3(3,2),8) xor to_unsigned(round4(3,1),8)));
+		round4(0,3)<= to_integer((to_unsigned(round3(0,3),8) xor to_unsigned(round4(0,2),8)));
+		round4(1,3)<= to_integer((to_unsigned(round3(1,3),8) xor to_unsigned(round4(1,2),8)));
+		round4(2,3)<= to_integer((to_unsigned(round3(2,3),8) xor to_unsigned(round4(2,2),8)));
+		round4(3,3)<= to_integer((to_unsigned(round3(3,3),8) xor to_unsigned(round4(3,2),8)));
+		--Round5 Key
+		temp22 <=round4(0,3);
+		round4(0,3)<=round4(1,3);
+		round4(1,3)<=round4(2,3);
+		round4(2,3)<=round4(3,3);
+		round4(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round4(counter,3) / 16;
+				g <= round4(counter,3) mod 16;
+				round4(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round5(0,0)<= to_integer(((to_unsigned(round4(0,0),8)) xor (to_unsigned(round4(0,3),8)) xor (to_unsigned(Rcon(0,4),8))));
+		round5(1,0)<= to_integer(((to_unsigned(round4(1,0),8)) xor (to_unsigned(round4(1,3),8)) xor (to_unsigned(Rcon(1,4),8))));
+		round5(2,0)<= to_integer(((to_unsigned(round4(2,0),8)) xor (to_unsigned(round4(2,3),8)) xor (to_unsigned(Rcon(2,4),8))));
+		round5(3,0)<= to_integer(((to_unsigned(round4(3,0),8)) xor (to_unsigned(round4(3,3),8)) xor (to_unsigned(Rcon(3,4),8))));
+		round5(0,1)<= to_integer((to_unsigned(round4(0,1),8) xor to_unsigned(round5(0,0),8)));
+		round5(1,1)<= to_integer((to_unsigned(round4(1,1),8) xor to_unsigned(round5(1,0),8)));
+		round5(2,1)<= to_integer((to_unsigned(round4(2,1),8) xor to_unsigned(round5(2,0),8)));
+		round5(3,1)<= to_integer((to_unsigned(round4(3,1),8) xor to_unsigned(round5(3,0),8)));	
+		round5(0,2)<= to_integer((to_unsigned(round4(0,2),8) xor to_unsigned(round5(0,1),8)));
+		round5(1,2)<= to_integer((to_unsigned(round4(1,2),8) xor to_unsigned(round5(1,1),8)));
+		round5(2,2)<= to_integer((to_unsigned(round4(2,2),8) xor to_unsigned(round5(2,1),8)));
+		round5(3,2)<= to_integer((to_unsigned(round4(3,2),8) xor to_unsigned(round5(3,1),8)));
+		round5(0,3)<= to_integer((to_unsigned(round4(0,3),8) xor to_unsigned(round5(0,2),8)));
+		round5(1,3)<= to_integer((to_unsigned(round4(1,3),8) xor to_unsigned(round5(1,2),8)));
+		round5(2,3)<= to_integer((to_unsigned(round4(2,3),8) xor to_unsigned(round5(2,2),8)));
+		round5(3,3)<= to_integer((to_unsigned(round4(3,3),8) xor to_unsigned(round5(3,2),8)));
+		--Round6 Key
+		temp22 <=round5(0,3);
+		round5(0,3)<=round4(1,3);
+		round5(1,3)<=round4(2,3);
+		round5(2,3)<=round4(3,3);
+		round5(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round4(counter,3) / 16;
+				g <= round4(counter,3) mod 16;
+				round4(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round6(0,0)<= to_integer(((to_unsigned(round5(0,0),8)) xor (to_unsigned(round5(0,3),8)) xor (to_unsigned(Rcon(0,5),8))));
+		round6(1,0)<= to_integer(((to_unsigned(round5(1,0),8)) xor (to_unsigned(round5(1,3),8)) xor (to_unsigned(Rcon(1,5),8))));
+		round6(2,0)<= to_integer(((to_unsigned(round5(2,0),8)) xor (to_unsigned(round5(2,3),8)) xor (to_unsigned(Rcon(2,5),8))));
+		round6(3,0)<= to_integer(((to_unsigned(round5(3,0),8)) xor (to_unsigned(round5(3,3),8)) xor (to_unsigned(Rcon(3,5),8))));
+		round6(0,1)<= to_integer((to_unsigned(round5(0,1),8) xor to_unsigned(round6(0,0),8)));
+		round6(1,1)<= to_integer((to_unsigned(round5(1,1),8) xor to_unsigned(round6(1,0),8)));
+		round6(2,1)<= to_integer((to_unsigned(round5(2,1),8) xor to_unsigned(round6(2,0),8)));
+		round6(3,1)<= to_integer((to_unsigned(round5(3,1),8) xor to_unsigned(round6(3,0),8)));	
+		round6(0,2)<= to_integer((to_unsigned(round5(0,2),8) xor to_unsigned(round6(0,1),8)));
+		round6(1,2)<= to_integer((to_unsigned(round5(1,2),8) xor to_unsigned(round6(1,1),8)));
+		round6(2,2)<= to_integer((to_unsigned(round5(2,2),8) xor to_unsigned(round6(2,1),8)));
+		round6(3,2)<= to_integer((to_unsigned(round5(3,2),8) xor to_unsigned(round6(3,1),8)));
+		round6(0,3)<= to_integer((to_unsigned(round5(0,3),8) xor to_unsigned(round6(0,2),8)));
+		round6(1,3)<= to_integer((to_unsigned(round5(1,3),8) xor to_unsigned(round6(1,2),8)));
+		round6(2,3)<= to_integer((to_unsigned(round5(2,3),8) xor to_unsigned(round6(2,2),8)));
+		round6(3,3)<= to_integer((to_unsigned(round5(3,3),8) xor to_unsigned(round6(3,2),8)));
+		--Round7 Key
+		temp22 <=round6(0,3);
+		round6(0,3)<=round4(1,3);
+		round6(1,3)<=round4(2,3);
+		round6(2,3)<=round4(3,3);
+		round6(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round6(counter,3) / 16;
+				g <= round6(counter,3) mod 16;
+				round6(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round7(0,0)<= to_integer(((to_unsigned(round6(0,0),8)) xor (to_unsigned(round6(0,3),8)) xor (to_unsigned(Rcon(0,6),8))));
+		round7(1,0)<= to_integer(((to_unsigned(round6(1,0),8)) xor (to_unsigned(round6(1,3),8)) xor (to_unsigned(Rcon(1,6),8))));
+		round7(2,0)<= to_integer(((to_unsigned(round6(2,0),8)) xor (to_unsigned(round6(2,3),8)) xor (to_unsigned(Rcon(2,6),8))));
+		round7(3,0)<= to_integer(((to_unsigned(round6(3,0),8)) xor (to_unsigned(round6(3,3),8)) xor (to_unsigned(Rcon(3,6),8))));
+		round7(0,1)<= to_integer((to_unsigned(round6(0,1),8) xor to_unsigned(round7(0,0),8)));
+		round7(1,1)<= to_integer((to_unsigned(round6(1,1),8) xor to_unsigned(round7(1,0),8)));
+		round7(2,1)<= to_integer((to_unsigned(round6(2,1),8) xor to_unsigned(round7(2,0),8)));
+		round7(3,1)<= to_integer((to_unsigned(round6(3,1),8) xor to_unsigned(round7(3,0),8)));	
+		round7(0,2)<= to_integer((to_unsigned(round6(0,2),8) xor to_unsigned(round7(0,1),8)));
+		round7(1,2)<= to_integer((to_unsigned(round6(1,2),8) xor to_unsigned(round7(1,1),8)));
+		round7(2,2)<= to_integer((to_unsigned(round6(2,2),8) xor to_unsigned(round7(2,1),8)));
+		round7(3,2)<= to_integer((to_unsigned(round6(3,2),8) xor to_unsigned(round7(3,1),8)));
+		round7(0,3)<= to_integer((to_unsigned(round6(0,3),8) xor to_unsigned(round7(0,2),8)));
+		round7(1,3)<= to_integer((to_unsigned(round6(1,3),8) xor to_unsigned(round7(1,2),8)));
+		round7(2,3)<= to_integer((to_unsigned(round6(2,3),8) xor to_unsigned(round7(2,2),8)));
+		round7(3,3)<= to_integer((to_unsigned(round6(3,3),8) xor to_unsigned(round7(3,2),8)));
+		--Round8 Key
+		temp22 <=round7(0,3);
+		round7(0,3)<=round7(1,3);
+		round7(1,3)<=round7(2,3);
+		round7(2,3)<=round7(3,3);
+		round7(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round7(counter,3) / 16;
+				g <= round7(counter,3) mod 16;
+				round7(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round8(0,0)<= to_integer(((to_unsigned(round7(0,0),8)) xor (to_unsigned(round7(0,3),8)) xor (to_unsigned(Rcon(0,7),8))));
+		round8(1,0)<= to_integer(((to_unsigned(round7(1,0),8)) xor (to_unsigned(round7(1,3),8)) xor (to_unsigned(Rcon(1,7),8))));
+		round8(2,0)<= to_integer(((to_unsigned(round7(2,0),8)) xor (to_unsigned(round7(2,3),8)) xor (to_unsigned(Rcon(2,7),8))));
+		round8(3,0)<= to_integer(((to_unsigned(round7(3,0),8)) xor (to_unsigned(round7(3,3),8)) xor (to_unsigned(Rcon(3,7),8))));
+		round8(0,1)<= to_integer((to_unsigned(round7(0,1),8) xor to_unsigned(round8(0,0),8)));
+		round8(1,1)<= to_integer((to_unsigned(round7(1,1),8) xor to_unsigned(round8(1,0),8)));
+		round8(2,1)<= to_integer((to_unsigned(round7(2,1),8) xor to_unsigned(round8(2,0),8)));
+		round8(3,1)<= to_integer((to_unsigned(round7(3,1),8) xor to_unsigned(round8(3,0),8)));	
+		round8(0,2)<= to_integer((to_unsigned(round7(0,2),8) xor to_unsigned(round8(0,1),8)));
+		round8(1,2)<= to_integer((to_unsigned(round7(1,2),8) xor to_unsigned(round8(1,1),8)));
+		round8(2,2)<= to_integer((to_unsigned(round7(2,2),8) xor to_unsigned(round8(2,1),8)));
+		round8(3,2)<= to_integer((to_unsigned(round7(3,2),8) xor to_unsigned(round8(3,1),8)));
+		round8(0,3)<= to_integer((to_unsigned(round7(0,3),8) xor to_unsigned(round8(0,2),8)));
+		round8(1,3)<= to_integer((to_unsigned(round7(1,3),8) xor to_unsigned(round8(1,2),8)));
+		round8(2,3)<= to_integer((to_unsigned(round7(2,3),8) xor to_unsigned(round8(2,2),8)));
+		round8(3,3)<= to_integer((to_unsigned(round7(3,3),8) xor to_unsigned(round8(3,2),8)));
+		--Round9 Key
+		temp22 <=round8(0,3);
+		round8(0,3)<=round8(1,3);
+		round8(1,3)<=round8(2,3);
+		round8(2,3)<=round8(3,3);
+		round8(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round8(counter,3) / 16;
+				g <= round8(counter,3) mod 16;
+				round8(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round9(0,0)<= to_integer(((to_unsigned(round8(0,0),8)) xor (to_unsigned(round8(0,3),8)) xor (to_unsigned(Rcon(0,8),8))));
+		round9(1,0)<= to_integer(((to_unsigned(round8(1,0),8)) xor (to_unsigned(round8(1,3),8)) xor (to_unsigned(Rcon(1,8),8))));
+		round9(2,0)<= to_integer(((to_unsigned(round8(2,0),8)) xor (to_unsigned(round8(2,3),8)) xor (to_unsigned(Rcon(2,8),8))));
+		round9(3,0)<= to_integer(((to_unsigned(round8(3,0),8)) xor (to_unsigned(round8(3,3),8)) xor (to_unsigned(Rcon(3,8),8))));
+		round9(0,1)<= to_integer((to_unsigned(round8(0,1),8) xor to_unsigned(round9(0,0),8)));
+		round9(1,1)<= to_integer((to_unsigned(round8(1,1),8) xor to_unsigned(round9(1,0),8)));
+		round9(2,1)<= to_integer((to_unsigned(round8(2,1),8) xor to_unsigned(round9(2,0),8)));
+		round9(3,1)<= to_integer((to_unsigned(round8(3,1),8) xor to_unsigned(round9(3,0),8)));	
+		round9(0,2)<= to_integer((to_unsigned(round8(0,2),8) xor to_unsigned(round9(0,1),8)));
+		round9(1,2)<= to_integer((to_unsigned(round8(1,2),8) xor to_unsigned(round9(1,1),8)));
+		round9(2,2)<= to_integer((to_unsigned(round8(2,2),8) xor to_unsigned(round9(2,1),8)));
+		round9(3,2)<= to_integer((to_unsigned(round8(3,2),8) xor to_unsigned(round9(3,1),8)));
+		round9(0,3)<= to_integer((to_unsigned(round8(0,3),8) xor to_unsigned(round9(0,2),8)));
+		round9(1,3)<= to_integer((to_unsigned(round8(1,3),8) xor to_unsigned(round9(1,2),8)));
+		round9(2,3)<= to_integer((to_unsigned(round8(2,3),8) xor to_unsigned(round9(2,2),8)));
+		round9(3,3)<= to_integer((to_unsigned(round8(3,3),8) xor to_unsigned(round9(3,2),8)));
+		--Round10 Key
+		temp22 <=round9(0,3);
+		round9(0,3)<=round9(1,3);
+		round9(1,3)<=round9(2,3);
+		round9(2,3)<=round9(3,3);
+		round9(3,3)<=temp22;
+		for counter in 3 downto 0 loop
+				f <= round9(counter,3) / 16;
+				g <= round9(counter,3) mod 16;
+				round9(counter,3)<=to_integer(unsigned(S(g,f)));
+		end loop;
+		round10(0,0)<= to_integer(((to_unsigned(round9(0,0),8)) xor (to_unsigned(round9(0,3),8)) xor (to_unsigned(Rcon(0,9),8))));
+		round10(1,0)<= to_integer(((to_unsigned(round9(1,0),8)) xor (to_unsigned(round9(1,3),8)) xor (to_unsigned(Rcon(1,9),8))));
+		round10(2,0)<= to_integer(((to_unsigned(round9(2,0),8)) xor (to_unsigned(round9(2,3),8)) xor (to_unsigned(Rcon(2,9),8))));
+		round10(3,0)<= to_integer(((to_unsigned(round9(3,0),8)) xor (to_unsigned(round9(3,3),8)) xor (to_unsigned(Rcon(3,9),8))));
+		round10(0,1)<= to_integer((to_unsigned(round9(0,1),8) xor to_unsigned(round10(0,0),8)));
+		round10(1,1)<= to_integer((to_unsigned(round9(1,1),8) xor to_unsigned(round10(1,0),8)));
+		round10(2,1)<= to_integer((to_unsigned(round9(2,1),8) xor to_unsigned(round10(2,0),8)));
+		round10(3,1)<= to_integer((to_unsigned(round9(3,1),8) xor to_unsigned(round10(3,0),8)));	
+		round10(0,2)<= to_integer((to_unsigned(round9(0,2),8) xor to_unsigned(round10(0,1),8)));
+		round10(1,2)<= to_integer((to_unsigned(round9(1,2),8) xor to_unsigned(round10(1,1),8)));
+		round10(2,2)<= to_integer((to_unsigned(round9(2,2),8) xor to_unsigned(round10(2,1),8)));
+		round10(3,2)<= to_integer((to_unsigned(round9(3,2),8) xor to_unsigned(round10(3,1),8)));
+		round10(0,3)<= to_integer((to_unsigned(round9(0,3),8) xor to_unsigned(round10(0,2),8)));
+		round10(1,3)<= to_integer((to_unsigned(round9(1,3),8) xor to_unsigned(round10(1,2),8)));
+		round10(2,3)<= to_integer((to_unsigned(round9(2,3),8) xor to_unsigned(round10(2,2),8)));
+		round10(3,3)<= to_integer((to_unsigned(round9(3,3),8) xor to_unsigned(round10(3,2),8)));
+		-- xor with key
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR std_logic_vector(to_unsigned(key(i,j),8)) ; 
+end loop ; 
+end loop ;  
+-- 
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+  x<= to_integer(unsigned(R)) ; -- integer location  
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1);  -- row 1 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);    -- row 2 
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);  --row 3 
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= std_logic_vector (T1(3 downto 0 ) ); 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w0(2)) XOR (w0(3)) ; --  checked and changed
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round1(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+
+-- end of  round   
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul3(x2,y2) ) XOR (  mul2(x1,y1)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ; -- i changd the error of mul2 and 3
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round2(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round   
+--
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round3(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round   
+
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round4(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round   
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round5(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round  
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round6(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round  
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round7(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round     
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round8(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round   
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+-- mix coloumns
+T<= std_logic_vector (w0(0)) ; 
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w0(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,0)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w0(2)) XOR (w0(3)) ;
+T2<= (w0(1)) ;  
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w0(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,0)<= (w0(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w0(3)) ; 
+ T5<=(w0(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w0(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R)) ; 
+  y6<= to_integer(unsigned(C)) ;
+data(2,0)<= (w0(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w0(1)) ; 
+T7<=(w0(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w0(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,0)<= ((w0(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w0(2))) ; 
+
+
+T<= (w1(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w1(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,1)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w1(2)) XOR (w1(3)) ;
+T2<= (w1(1)) ;  
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w1(2)) ; 
+ R4 <= T1(7 downto 4 ) ;
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,1)<= (w1(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w1(3)) ;  
+ T5<=(w1(2)) ;
+ R5<= T1( 7 downto 4) ; 
+ C5 <= T1(3 downto 0 ) ;
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w1(3)) ; 
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,1)<= (w1(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w1(1)) ; 
+T7<=(w1(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w1(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ;
+x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ; 
+data(3,1)<= ((w1(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w1(2))) ; 
+
+
+T<= (w2(0)) ;  
+ R1 <= T(7 downto 4 ) ; 
+ C1 <= T(3 downto 0 ) ;
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w2(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,2)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w2(2)) XOR (w2(3)) ; 
+T2<= (w2(1)) ; 
+ R3 <= T(7 downto 4 ) ;
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w2(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,2)<= (w2(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w2(3)) ;  
+ T5<=(w2(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w2(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,2)<= (w2(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w2(1)) ;  
+T7<=(w2(0)) ;
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ; 
+ x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ;
+ T8<= (w2(3)) ; 
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,2)<= ((w2(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,y7)) XOR((w2(2))) ; 
+
+
+
+T<= (w3(0)) ;  
+ R1 <= T(7 downto 4 ) ;
+ C1 <= T(3 downto 0 ) ; 
+ x1<= to_integer(unsigned(R1)) ; 
+  y1<= to_integer(unsigned(C1)) ;
+ T1<=(w3(1)) ; 
+ R2 <= T1(7 downto 4 ) ; 
+ C2 <= T1(3 downto 0 ) ; 
+ x2<= to_integer(unsigned(R2)) ; 
+  y2<= to_integer(unsigned(C2)) ;
+ data(0,3)<= (mul2(x1,y1) ) XOR (  mul3(x2,y2)  ) XOR (w3(2)) XOR (w3(3)) ;
+T2<= (w3(1)) ; 
+ R3 <= T(7 downto 4 ) ; 
+ C3 <= T(3 downto 0 ) ;
+ x3<= to_integer(unsigned(R3)) ; 
+  y3<= to_integer(unsigned(C3)) ;
+ T3<=(w3(2)) ; 
+ R4 <= T1(7 downto 4 ) ; 
+ C4 <= T1(3 downto 0 ) ; 
+ x4<= to_integer(unsigned(R4)) ; 
+  y4<= to_integer(unsigned(C4)) ;
+data(1,3)<= (w3(0)) XOR (mul2(x3,y3)) XOR ( mul3(x4,y4)) XOR(w3(3)) ; 
+ T5<=(w3(2)) ; 
+ R5 <= T1(7 downto 4 ) ;
+ C5 <= T1(3 downto 0 ) ; 
+ x5<= to_integer(unsigned(R5)) ; 
+  y5<= to_integer(unsigned(C5)) ;
+ T6<= (w3(3)) ;  
+ R6 <= T(7 downto 4 ) ; 
+ C6 <= T(3 downto 0 ) ; 
+ x6<= to_integer(unsigned(R6)) ; 
+  y6<= to_integer(unsigned(C6)) ;
+data(2,3)<= (w3(0)) XOR (mul2(x5,y5)) XOR ( mul3(x6,y6)) XOR(w3(1)) ; 
+T7<=(w3(0)) ; 
+ R7 <= T1(7 downto 4 ) ; 
+ C7 <= T1(3 downto 0 ) ;
+x7<= to_integer(unsigned(R7)) ; 
+  y7<= to_integer(unsigned(C7)) ; 
+ T8<= (w3(3)) ;  
+ R8 <= T(7 downto 4 ) ; 
+ C8 <= T(3 downto 0 ) ; 
+ x8<= to_integer(unsigned(R8)) ; 
+  y8<= to_integer(unsigned(C8)) ;
+data(3,3)<= ((w3(1))) XOR (mul2(x8,y8)) XOR ( mul3(x7,7)) XOR((w3(2))) ;
+-- end of mix coloumns 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round9(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  round   
+-- substitution bytes 
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+temp <=(data(i,j)) ; 
+ R <= temp(7 downto 4 ) ;
+ C <= temp(3 downto 0 ) ;
+ x<= to_integer(unsigned(R)) ; 
+  y<= to_integer(unsigned(C)) ;
+data(i,j) <= (S(x,y)) ; 
+end loop ;
+end loop ;
+-- shift rows
+for  i in 1 to 3 loop
+if i=1 then 
+ temp1 <=(data(1,3)) ;
+data(1,3)<= data(1,2); 
+data(1,2)<= data(1,1); 
+data(1,1)<= data(1,0);
+data(1,0)<= temp1; 
+end if;
+if i=2 then 
+ temp2 <=data(2,2) ;
+ temp3<=data(2,3) ; 
+data(2,2)<=data(2,0);
+data(2,3)<= data(2,1); 
+data(2,0) <= temp2; 
+data(2,1)<=temp3;  
+end if;
+ if i=3 then 
+  tempA <=data(3,3) ;
+ tempB <=data(3,0) ; 
+ tempC <= data(3,2) ;
+data(3,0)<= data(3,1);
+data(3,1)<=tempC;  
+data(3,2)<=tempA;
+data(3,3)<=tempB;  
+end if ;
+end loop ;
+-- temps of word 
+w0<=((data(0,0)),(data(1,0)),(data(2,0)),(data(3,0))) ;
+	w1<=((data(0,1)),(data(1,1)),(data(2,1)),(data(3,1))) ;
+w2<=((data(0,2)),(data(1,2)),(data(2,2)),(data(3,2))) ;
+w3<=((data(0,3)),(data(1,3)),(data(2,3)),(data(3,3))) ;
+
+for  i in 0 to 3 loop
+for j in 0 to 3 loop 
+data(i,j)<= data(i,j) XOR (std_logic_vector(to_unsigned(round10(i,j),8))) ; 
+end loop ; 
+end loop ; 
+
+-- end of  encryption 
+ 
+
+
+
+
+
+		--starting the 10 rounds
+		
+		
+		--Send
+		c1m:= 0;
+		c2m:=0;
+		clk_count:=0;
+		for j in 0 to sent_count loop
+		i_TX_Byte <= std_logic_vector(to_unsigned(im(c2m,c1m),8));
+		i_TX_DV<= '1';
+		c2m:=c2m+1;
+		if(c2m=4)then
+		c2m:=0;
+		c1m:=c1m+1;
+		end if;
+		if(i_clk'event and i_clk='1')then
+		clk_count:=clk_count+1;
+		end if;
+		if(clk_count = 1)then
+		i_TX_DV<= '0';
+		end if;
+		if(clk_count = 10)then
+		i_TX_Byte <= std_logic_vector(to_unsigned(im(c2m,c1m),8));
+		i_TX_DV<= '1';
+		clk_count := 0;
+		end if;
+		end loop;
+	end if;
+	isEnter <= '0';
+	count<=0;	
+	
+end Behavioral;
+
+
+
+
+
+
+
+
+
+
+

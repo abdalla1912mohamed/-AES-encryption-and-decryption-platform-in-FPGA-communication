@@ -1,0 +1,2 @@
+vhdl isim_temp "decrypt.vhd"
+vhdl isim_temp "key_test.vhd"
